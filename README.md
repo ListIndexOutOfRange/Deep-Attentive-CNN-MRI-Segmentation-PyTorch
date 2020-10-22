@@ -6,7 +6,7 @@
 +----------------------------------------------------------------------------------------------------+
  -->
 
-# SPYGLASS     
+# Deep Attentive CNN     
 
 Pytorch implementation of the Paper [Deep Attentive Features for Prostate Segmentation in 3D Transrectal Ultrasound](https://arxiv.org/pdf/1907.01743.pdf). 
 Adapted from the original paper's implementation [here](https://github.com/wulalago/DAF3D).
