@@ -4,12 +4,11 @@ import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import random_split, DataLoader
 from torchvision import transforms
-from data import NiftiDataset
 from typing import Tuple, Optional, Callable, NewType
-
+from data import NiftiDataset
 
 # Type hint
-Transform =  NewType('Transform', Optional[Callable[[np.ndarray], torch.Tensor]])
+Transform =  NewType('Transform', Optional[Callable[[np.ndarray], torch.FloatTensor]])
 
 
 class DataModule(LightningDataModule):
@@ -24,9 +23,11 @@ class DataModule(LightningDataModule):
 
         Args:
             input_root (str): Path to the folder containing the images and masks.
+            shape (Tuple[int]): Shape of one image after loading. Will reshape by resampling.
             train_batch_size (int, optional): Training batch size. Defaults to 64.
             val_batch_size (int, optional): Validation batch size. Defaults to 64.
-            num_workers (int, optional): How many subprocesses to use for data loading. Defaults to 4.
+            num_workers (int, optional): How many subprocesses to use for data loading.
+                                         Defaults to 4.
         """
         super().__init__()
         self.input_root = input_root
@@ -38,7 +39,7 @@ class DataModule(LightningDataModule):
 
     def init_transforms(self):
         """ To be implemented. """
-        #TODO: make transforms that perfom on 3D MRI images & masks.
+        #TODO: make transforms that perfom on 3D images & masks.
         return None, None
 
     def setup(self, stage: str=None) -> None:
@@ -49,8 +50,7 @@ class DataModule(LightningDataModule):
                                    Init two splitted dataset or one full. Defaults to None.
         """
         total_length = len(os.listdir(self.input_root))//2
-        train_length = int(0.8*total_length)
-        val_length   = int(0.2*total_length)
+        train_length, val_length = int(0.8*total_length), int(0.2*total_length)
         if train_length + val_length != total_length: # round error
             val_length += 1
         if stage == 'fit' or stage is None:
@@ -73,5 +73,8 @@ class DataModule(LightningDataModule):
 
     @classmethod
     def from_config(cls, config):
+        """ From a DataModule config object (see config.py) instanciate a
+            Datamodule object.
+        """
         return cls(config.rootdir,config.shape, config.train_batch_size,
                    config.val_batch_size, config.num_workers)

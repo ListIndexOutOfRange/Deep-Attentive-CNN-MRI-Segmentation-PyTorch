@@ -8,7 +8,7 @@ from typing import Tuple, Optional, Callable, NewType
 
 
 # Type hint
-Transform = NewType('Transform', Optional[Callable[[np.ndarray], torch.Tensor]])
+Transform = NewType('Transform', Optional[Callable[[np.ndarray], torch.FloatTensor]])
 
 
 class NiftiDataset(Dataset):
@@ -21,6 +21,7 @@ class NiftiDataset(Dataset):
 
         Args:
             rootdir (str): Path to the folder containing the images and masks.
+            shape (Tuple[int]): Shape of one image after loading. Will reshape by resampling.
             transform (Transform, optional): Pytorch transformations to apply on couple
                                              (image, mask). Defaults to None.
         """
@@ -36,7 +37,7 @@ class NiftiDataset(Dataset):
         """ Generates the affine matrix with respect to specified resolution and shape. 
 
         Returns:
-            np.ndarray: A 4x4 matrix.
+            np.ndarray: A 4x4 matrix which enables to resize an input to self.shape.
         """
         new_resolution = [2,]*3
         new_affine = np.zeros((4,4))
@@ -60,7 +61,7 @@ class NiftiDataset(Dataset):
 
     def resample(self, data: nib.nifti1.Nifti1Image) -> nib.nifti1.Nifti1Image:
         """ Resample a nifti image, ie changes its affine matrix and its shape
-            so that it matches self.shape
+            so that it matches self.shape.
 
         Args:
             data (nib.nifti1.Nifti1Image): A 3D Nifti1 image.
@@ -72,7 +73,7 @@ class NiftiDataset(Dataset):
                             target_shape=self.shape, interpolation='nearest')
 
 
-    def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
+    def __getitem__(self, index: int) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """ Loads, applies transforms and returns a couple (image, mask).
 
         Args:
@@ -90,6 +91,7 @@ class NiftiDataset(Dataset):
             image_array, mask_array = self.transform(image_array), self.transform(mask_array)
         image_tensor = torch.from_numpy(image_array)
         mask_tensor  = torch.from_numpy(mask_array)
+        # Permute from (widht, height, depth) to (depth, widht, height) and add channel dim.
         image_tensor = image_tensor.permute(2,0,1).unsqueeze(0)
         mask_tensor  = mask_tensor.permute(2,0,1).unsqueeze(0)
         return image_tensor, mask_tensor

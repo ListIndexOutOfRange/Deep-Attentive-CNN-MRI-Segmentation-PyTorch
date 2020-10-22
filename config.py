@@ -1,3 +1,13 @@
+""" This file handles all the hyperparameters of the pipeline.
+
+Those hyperparameters are divided in two dataclasses:
+    - DataModule
+    - Model
+They will be used to instanciate two objects of same names.
+Those two objects (DataModule and Model) will be used by a Trainer object
+to run the training pipeline.
+"""
+
 from dataclasses import dataclass
 from typing import NewType, Tuple, Union
 from model import ResNeXtBottleneck, ResNeXtDilatedBottleneck
@@ -6,11 +16,11 @@ from model import ResNeXtBottleneck, ResNeXtDilatedBottleneck
 ResBlock = NewType('ResBlock', Union[ResNeXtBottleneck, ResNeXtDilatedBottleneck])
 
 
-# +-------------------------------------------------------------------------------------+ #
-# |                                                                                     | #
-# |                                      DATAMODULE                                     | #
-# |                                                                                     | #
-# +-------------------------------------------------------------------------------------+ #
+# +---------------------------------------------------------------------------------------------+ #
+# |                                                                                             | #
+# |                                          DATAMODULE                                         | #
+# |                                                                                             | #
+# +---------------------------------------------------------------------------------------------+ #
 
 @dataclass
 class DataModule:
@@ -38,16 +48,42 @@ class DataModule:
 
 
 
-# +-------------------------------------------------------------------------------------+ #
-# |                                                                                     | #
-# |                                         TRAIN                                       | #
-# |                                                                                     | #
-# +-------------------------------------------------------------------------------------+ #
+# +---------------------------------------------------------------------------------------------+ #
+# |                                                                                             | #
+# |                                            MODEL                                            | #
+# |                                                                                             | #
+# +---------------------------------------------------------------------------------------------+ #
 
 @dataclass
 class Model:
     
-    """ Training config used to instanciate a LightningModel and a Trainer. """
+    """ Config to instanciate a LightningModel object. See model/model.py
+
+    Args:
+        encoder_block (ResBlock): Which basic residual block is used in the 3D backbone network.
+
+        encoder_backbone (str): Wich 3d backbone network to use. Can be one of:
+                                'resnext3d10', 'resnext3d18', 'resnext3d34', 'resnext3d101'
+                                'resnext3d152', 'resnext3d200'.
+
+        num_classes (int): Output dim of the final fully connected layer.
+
+        lr (float): Initial learning rate.
+
+        momentum (float): Controls the use of momentum in the optimizer. Float in [0,1].
+
+        nesterov (bool): Controls the use of Nesterov momentum.
+
+        weight_decay: L2 penalty of model's weights. 
+
+        rop_mode: ReduceOnPlateau can monitor a min or a max of a given metrics.
+
+        rop_factor: Learning rate reduction value. new_lr = factor * old_lr.
+
+        rop_patience: How many epochs without metric improving to wait.
+
+        verbose: Should ReduceOnPlateau print when it acts on the learning rate.   
+    """
 
     encoder_block:     ResBlock = ResNeXtBottleneck 
     encoder_backbone:       str = 'resnext3d34'

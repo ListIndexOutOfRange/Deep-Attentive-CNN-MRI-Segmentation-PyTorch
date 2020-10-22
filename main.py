@@ -1,8 +1,8 @@
 """ Main Python file to start training using config.py """
 
 from argparse import ArgumentParser
-from pytorch_lightning.callbacks import LearningRateLogger, EarlyStopping, ModelCheckpoint
 from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import LearningRateLogger, EarlyStopping
 from data import DataModule
 from model import LightningModel
 import config as cfg
