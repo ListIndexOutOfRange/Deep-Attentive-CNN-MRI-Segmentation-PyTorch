@@ -1,0 +1,11 @@
+nibabel==3.2.0
+nilearn==0.6.2
+numpy==1.19.0
+pytorch-lightning==0.9.0
+tensorboard==2.2.0
+tensorboard-plugin-wit==1.7.0
+torch==1.6.0
+torch-model-archiver==0.1.0b20200409
+torchserve==0.0.1b20200409
+torchvision==0.7.0
+tqdm==4.48.0

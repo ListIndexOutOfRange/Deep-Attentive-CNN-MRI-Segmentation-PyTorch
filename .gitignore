@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+**/__pycache__/
+**/.ipynb_checkpoints/
+*.py[cod]
+*.pyc
+*.pyo
+*.so
+
+# Pipenv
+Pipfile
+Pipfile.lock
+
+
+# Data from Training
+lightning_logs/
+*.pt
+**.pt
+
+# Test
+test*.py
+
+# Vscode
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
