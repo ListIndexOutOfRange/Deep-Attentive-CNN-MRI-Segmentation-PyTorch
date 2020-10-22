@@ -84,7 +84,7 @@ Based on [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightni
 
 Clone repo:
 
-```git clone https://github.com/the-dharma-bum/spyglass```
+```git clone https://github.com/the-dharma-bum/Deep-Attentive-CNN---MRI-Segmentation---PyTorch```
 
 Install dependancies by running: 
 
