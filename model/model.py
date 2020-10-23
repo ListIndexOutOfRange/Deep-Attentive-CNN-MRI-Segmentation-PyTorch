@@ -3,11 +3,11 @@ This class implements all the logic code and will be the one to be fit by a Trai
 """
 
 import torch
-import torch.nn.functional as F
+import torch.optim as optim
 import pytorch_lightning as pl
 from typing import Tuple, Dict
-from .attentive_cnn import DAF3D
-from .dice_loss import DiceLoss, dice_ratio
+from .components import FPNEncoder, AttentionModule, ASPPDecoder, MultiHeadPrediction
+from .loss import dice_ratio, WeightedBCEDiceLoss
 
 
 class LightningModel(pl.LightningModule):
@@ -25,36 +25,47 @@ class LightningModel(pl.LightningModule):
         """ Instanciate a Lightning Model. 
         The call to the Lightning method save_hyperparameters() make every hp accessible through
         self.hparams. e.g: self.hparams.use_targets_smoothing. It also sends them to TensorBoard.
-        See model.utils.init_model to see them all.
+        See config.py.Model() to see them all.
         """
         super().__init__()
         self.save_hyperparameters()
-        self.net  = DAF3D()
-        self.bce  = torch.nn.BCELoss()
-        self.dice = DiceLoss()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+        self.encoder   = FPNEncoder(self.hparams.backbone_block, self.hparams.backbone_name)
+        self.attention = AttentionModule()
+        self.decoder   = ASPPDecoder(self.hparams.aspp_rates)
+        self.predict   = MultiHeadPrediction()
+        self.loss      = WeightedBCEDiceLoss()
 
     def configure_optimizers(self) -> Dict:
         """ Instanciate an optimizer and a learning rate scheduler to be used during training.
 
         Returns:
-            (Dict): Dict containing the optimizer(s) and learning rate scheduler(s) to be used by a Trainer
-                    object using this model. 
+            (Dict): Dict containing the optimizer(s) and learning rate scheduler(s) to be used by
+                    a Trainer object using this model. 
                     The 'monitor' key is used by the ReduceLROnPlateau scheduler.                        
         """
-        optimizer = torch.optim.SGD(self.net.parameters(),
-                                    lr=self.hparams.lr,
-                                    momentum=self.hparams.momentum,
-                                    nesterov=self.hparams.nesterov, 
-                                    weight_decay=self.hparams.weight_decay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-                                                               mode=self.hparams.rop_mode,
-                                                               factor=self.hparams.rop_factor,
-                                                               patience=self.hparams.rop_patience,
-                                                               verbose=self.hparams.verbose)
+        optimizer = optim.SGD(self.parameters(),
+                              lr           = self.hparams.lr,
+                              momentum     = self.hparams.momentum,
+                              nesterov     = self.hparams.nesterov, 
+                              weight_decay = self.hparams.weight_decay)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                         mode     = self.hparams.rop_mode,
+                                                         factor   = self.hparams.rop_factor,
+                                                         patience = self.hparams.rop_patience,
+                                                         verbose  = self.hparams.verbose)
         return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': 'val_loss'}
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        size = x.size()[2:]
+        single_layer_features  = self.encoder(x)
+        prediction_stage_1     = self.predict.after_fpn(single_layer_features, size)
+        attentive_feature_maps = self.attention(*single_layer_features) 
+        prediction_stage_2     = self.predict.after_attention(attentive_feature_maps[1:], size)
+        aspp                   = self.decoder(attentive_feature_maps[0])
+        prediction_stage_3     = self.predict.after_assp(aspp, size)
+        if self.training:
+            return prediction_stage_1, prediction_stage_2, prediction_stage_3
+        return prediction_stage_3
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict:
         """ Perform the classic training step (infere + compute loss) on a batch.
@@ -68,43 +79,13 @@ class LightningModel(pl.LightningModule):
             batch_idx ([type]): Dataset index of the batch. In range (dataset length)/(batch size).
 
         Returns:
-            Dict: Scalars computed in this function. Note that this dict is accesible from 'hooks' methods
-                  from Lightning, e.g on_epoch_start, on_epoch_end, etc...
+            Dict: Scalars computed in this function. Note that this dict is accesible from
+                  'hooks' methods from Lightning, e.g on_epoch_start, on_epoch_end, etc...
         """
         inputs, targets = batch
-        outputs1, outputs2, outputs3, outputs4, outputs1_1, outputs1_2, outputs1_3, outputs1_4, output = self.net(inputs)
-        output = F.sigmoid(output)
-        outputs1 = F.sigmoid(outputs1)
-        outputs2 = F.sigmoid(outputs2)
-        outputs3 = F.sigmoid(outputs3)
-        outputs4 = F.sigmoid(outputs4)
-        outputs1_1 = F.sigmoid(outputs1_1)
-        outputs1_2 = F.sigmoid(outputs1_2)
-        outputs1_3 = F.sigmoid(outputs1_3)
-        outputs1_4 = F.sigmoid(outputs1_4)
-        loss0_bce = self.bce(output, targets)
-        loss1_bce = self.bce(outputs1, targets)
-        loss2_bce = self.bce(outputs2, targets)
-        loss3_bce = self.bce(outputs3, targets)
-        loss4_bce = self.bce(outputs4, targets)
-        loss5_bce = self.bce(outputs1_1, targets)
-        loss6_bce = self.bce(outputs1_2, targets)
-        loss7_bce = self.bce(outputs1_3, targets)
-        loss8_bce = self.bce(outputs1_4, targets)
-        loss0_dice = self.dice(output, targets)
-        loss1_dice = self.dice(outputs1, targets)
-        loss2_dice = self.dice(outputs2, targets)
-        loss3_dice = self.dice(outputs3, targets)
-        loss4_dice = self.dice(outputs4, targets)
-        loss5_dice = self.dice(outputs1_1, targets)
-        loss6_dice = self.dice(outputs1_2, targets)
-        loss7_dice = self.dice(outputs1_3, targets)
-        loss8_dice = self.dice(outputs1_4, targets)
-        loss = loss0_bce + 0.4 * loss1_bce + 0.5 * loss2_bce + 0.7 * loss3_bce + 0.8 * loss4_bce + \
-                0.4 * loss5_bce + 0.5 * loss6_bce + 0.7 * loss7_bce + 0.8 * loss8_bce + \
-                loss0_dice + 0.4 * loss1_dice + 0.5 * loss2_dice + 0.7 * loss3_dice + 0.8 * loss4_dice + \
-                0.4 * loss5_dice + 0.7 * loss6_dice + 0.8 * loss7_dice + 1 * loss8_dice
-        self.log('Loss/Train', loss)
+        outputs = self(inputs)
+        loss = self.loss(outputs, targets)
+        self.log('Loss/Train', loss, prog_bar=True, logger=True)
         return {'loss': loss}
     
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict:
@@ -117,25 +98,27 @@ class LightningModel(pl.LightningModule):
             batch_idx (int): Dataset index of the batch. In range (dataset length)/(batch size).
 
         Returns:
-            Dict: Scalars computed in this function. Note that this dict is accesible from 'hooks' methods
-                  from Lightning, e.g on_epoch_start, on_epoch_end, etc...
+            Dict: Scalars computed in this function. Note that this dict is accesible from 
+                  'hooks' methods from Lightning, e.g on_epoch_start, on_epoch_end, etc...
         """
         inputs, targets = batch
-        output  = self.net(inputs)
-        predict = F.sigmoid(output)
+        output  = self(inputs)
+        predict = torch.sigmoid(output)
         predict = predict.data.cpu().numpy()
         targets = targets.data.cpu().numpy()
         loss = dice_ratio(predict, targets)
-        self.log('Loss/Validation', loss)
+        self.log('Loss/Validation', loss, prog_bar=True, logger=True)
         return {'val_loss': loss}
 
     def test_step(self, batch: torch.Tensor, batch_idx) ->  torch.Tensor:
         """ Not implemented. """
+        return None
 
     @classmethod
     def from_config(cls, config):
-        return cls(encoder_block        = config.encoder_block,
-                   encoder_backbone     = config.encoder_backbone,
+        return cls(backbone_block       = config.backbone_block,
+                   backbone_name        = config.backbone_name,
+                   aspp_rates           = config.aspp_rates,
                    num_classes          = config.num_classes,
                    lr                   = config.lr,
                    momentum             = config.momentum,

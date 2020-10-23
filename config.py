@@ -10,7 +10,7 @@ to run the training pipeline.
 
 from dataclasses import dataclass
 from typing import NewType, Tuple, Union
-from model import ResNeXtBottleneck, ResNeXtDilatedBottleneck
+from model.components import ResNeXtBottleneck, ResNeXtDilatedBottleneck
 
 # Type Hint:
 ResBlock = NewType('ResBlock', Union[ResNeXtBottleneck, ResNeXtDilatedBottleneck])
@@ -60,11 +60,11 @@ class Model:
     """ Config to instanciate a LightningModel object. See model/model.py
 
     Args:
-        encoder_block (ResBlock): Which basic residual block is used in the 3D backbone network.
+        backbone_block (ResBlock): Which basic residual block is used in the 3D backbone network.
 
-        encoder_backbone (str): Wich 3d backbone network to use. Can be one of:
-                                'resnext3d10', 'resnext3d18', 'resnext3d34', 'resnext3d101'
-                                'resnext3d152', 'resnext3d200'.
+        backbone_name (str): Wich 3d backbone network to use. Can be one of:
+                             'resnext3d10', 'resnext3d18', 'resnext3d34', 'resnext3d101'
+                             'resnext3d152', 'resnext3d200'.
 
         num_classes (int): Output dim of the final fully connected layer.
 
@@ -85,8 +85,9 @@ class Model:
         verbose: Should ReduceOnPlateau print when it acts on the learning rate.   
     """
 
-    encoder_block:     ResBlock = ResNeXtBottleneck 
-    encoder_backbone:       str = 'resnext3d34'
+    backbone_block:    ResBlock = ResNeXtBottleneck 
+    backbone_name:          str = 'resnext3d34'
+    aspp_rates:      Tuple[int] = (1, 6, 12, 18)           
     num_classes:            int = 2
     lr:                   float = 1e-6
     momentum:             float = 0.9

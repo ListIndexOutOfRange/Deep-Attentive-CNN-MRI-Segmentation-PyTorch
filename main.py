@@ -16,7 +16,8 @@ def init_trainer():
     parser = Trainer.add_argparse_args(parser)
     args   = parser.parse_args()
     lr_logger      = LearningRateLogger()
-    early_stopping = EarlyStopping(monitor='val_loss', mode='min', min_delta=0.001, patience=10, verbose=True)
+    early_stopping = EarlyStopping(monitor='Loss/Train', mode='min', min_delta=0.001, 
+                                   patience=5, verbose=True)
     return Trainer.from_argparse_args(args, callbacks = [lr_logger, early_stopping])
 
 

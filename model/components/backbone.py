@@ -1,8 +1,7 @@
 """ Adapted from https://github.com/wulalago/DAF3D/blob/master/ResNeXt3D.py. """
 
 from functools import partial
-from typing import NewType, Callable, Union, List
-
+from typing import NewType, Callable, Union, List, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -30,9 +29,7 @@ def downsample_basic_block(x: torch.FloatTensor,
 
 
 def get_fine_tuning_parameters(model, ft_begin_index):
-    """ Extracts network parameters starting at layer
-        indexed by ft_begin_index.
-    """
+    """ Extracts network parameters starting at layer indexed by ft_begin_index. """
     if ft_begin_index == 0:
         return model.parameters()
     ft_module_names = []
@@ -45,8 +42,8 @@ def get_fine_tuning_parameters(model, ft_begin_index):
             if ft_module in k:
                 parameters.append({'params': v})
                 break
-        else:
-            parameters.append({'params': v, 'lr': 0.0})
+            else:
+                parameters.append({'params': v, 'lr': 0.0})
     return parameters
 
 
@@ -57,6 +54,10 @@ def get_fine_tuning_parameters(model, ft_begin_index):
 # +-----------------------------------------------------------------------------------------------+ #
 
 class ResNeXtBottleneck(nn.Module):
+
+
+    """ ResNeXt top -> down basic block. Used for the FPN first two stages. """
+
     expansion = 2
     def __init__(self, inplanes: int, planes: int, cardinality: int, stride: int=1,
                  downsample: Callable=None) -> None:
@@ -87,6 +88,10 @@ class ResNeXtBottleneck(nn.Module):
 
 
 class ResNeXtDilatedBottleneck(nn.Module):
+
+
+    """ ResNeXt basic dilated block. Used for the FPN last two stages. """
+
     expansion = 2
     def __init__(self, inplanes: int, planes: int, cardinality: int, stride: int=1,
                  downsample: Callable=None) -> None:
@@ -125,26 +130,36 @@ class ResNeXtDilatedBottleneck(nn.Module):
 # Type Hint:
 ResidualBlock = NewType('ResidualBlock', Union[ResNeXtBottleneck, ResNeXtDilatedBottleneck])
 
-class ResNeXt3D(nn.Module):
-    def __init__(self, block: ResidualBlock, layers: List[int], shortcut_type: str='B',
-                 cardinality: int=32, num_classes: int=2):
+class ResNeXt3DEncoder(nn.Module):
+
+    """ ResNeXt3D. From paper 'Aggregated Residual Transformations for Deep Neural Networks'. 
+        4 stages: Two classic residual blocks, and two residual blocks with dilated convolutions.
+
+        This is a classic ResNeXt 3D implementation, minus the last two layers -
+        Adaptavive Average Pooling & Fully Connected.
+        Hence acts as a CNN encoder.
+    """
+
+    def __init__(self, block: ResidualBlock, layers: List[int], 
+                 shortcut_type: str='B', cardinality: int=32) -> None:
         self.inplanes = 64
-        super(ResNeXt3D, self).__init__()
+        super(ResNeXt3DEncoder, self).__init__()
+        # stem
         self.conv1 = nn.Conv3d(1, 64,
                                kernel_size=7, stride=(1, 2, 2), padding=(3, 3, 3), bias=False)
         self.gn1 = nn.GroupNorm(32, 64)
         self.relu = nn.PReLU()
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
+        # first two classic residual blocks
         self.layer1 = self._make_layer(block, 128, layers[0],
                                        shortcut_type, cardinality)
         self.layer2 = self._make_layer(block, 256, layers[1],
                                        shortcut_type, cardinality, stride=(1, 2, 2))
+        # last two dilated residual blocks
         self.layer3 = self._make_layer(ResNeXtDilatedBottleneck,  512, layers[2],
                                        shortcut_type, cardinality, stride=1)
         self.layer4 = self._make_layer(ResNeXtDilatedBottleneck, 1024, layers[3],
                                        shortcut_type, cardinality, stride=1)
-        self.avgpool = nn.AdaptiveAvgPool3d(1)
-        self.fc = nn.Linear(cardinality * 32 * block.expansion, num_classes)
         self._init_weight()
 
     def _init_weight(self):
@@ -174,20 +189,27 @@ class ResNeXt3D(nn.Module):
             layers.append(block(self.inplanes, planes, cardinality))
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        x = self.relu(self.gn1(self.conv1(x)))
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1) # flatten
-        x = self.fc(x)
-        return x
+    def forward(self, x: torch.FloatTensor) -> Tuple[torch.FloatTensor]:
+        """ Pass the input tensor through a 3d ResNeXt minus the final classifier. 
+
+        Args:
+            x (torch.FloatTensor): 5d tensor: (batch_size, channels, depth, width, height).
+
+        Returns:
+            Tuple[torch.FloatTensor]: Outputs of a residual block after each of the four stages.
+        """
+        stem = self.relu(self.gn1(self.conv1(x)))
+        layer1_output = self.layer1(self.maxpool(stem))
+        layer2_output = self.layer2(layer1_output)
+        layer3_output = self.layer3(layer2_output)
+        layer4_output = self.layer4(layer3_output)
+        return layer1_output, layer2_output, layer3_output, layer4_output
 
     @classmethod
-    def from_name(cls, block, model_name, **kwargs):
+    def from_config(cls, block, model_name, **kwargs):
+        """ Instanciate a ResNeCt 3D Encoder using with specified
+            basic block and architectures. 
+        """
         layers_layout = {
             'resnext3d10' : [1,  1,  1, 1],
             'resnext3d18' : [2,  2,  2, 2],
