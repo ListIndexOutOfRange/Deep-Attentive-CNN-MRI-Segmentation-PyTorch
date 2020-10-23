@@ -72,7 +72,7 @@ Based on [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightni
      1. Backbone: 3D ResNeXt
      2. Encoder: 3D FPN
      3. Attention
-     4. Decoder: ASPP
+     4. Decoder:    ASPP
      5. Multi Head Prediction
 
 
@@ -117,7 +117,7 @@ This command accepts a huge number of parameters. Run
 
 ```python main.py -h ```
 
-to see them all, or refer to [documentation de Pytorch Lightning](https://pytorch-lightning.readthedocs.io/en/latest/).
+to see them all, or refer to [Pytorch Lightning documentation](https://pytorch-lightning.readthedocs.io/en/latest/).
 
 Some usefull parameters:
 
