@@ -48,7 +48,7 @@ Based on [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightni
 |----------------------------------------------------------|:----------------:|:------------:|
 | Comments some class                                      |      TO DO       |              |
 | Add optimizer and scheduler choice                       |      TO DO       |              |
-| Refactor the model code: 3D-FPN, AFM, ASPP               |      TO DO       |              |
+| Refactor the model code: 3D-FPN, AFM, ASPP               |       DONE       |              |
 
 
 ## Bugfixes:
@@ -68,7 +68,12 @@ Based on [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightni
 
 # Last Commit Changes Log
 
-- Inital commit: Basic pipeline ready to be trained.
+- Refactor attentive model into 5 components:
+     1. Backbone: 3D ResNeXt
+     2. Encoder: 3D FPN
+     3. Attention
+     4. ASPP
+     5. Multi Head Prediction
 
 
 <!--
